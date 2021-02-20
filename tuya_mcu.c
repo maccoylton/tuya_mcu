@@ -5,8 +5,6 @@
  */
 
 #include <tuya_mcu.h>
-#include <stdlib.h>
-#include <string.h>
 
 bool    gotHeartbeat = false;
 bool    gotProdKey = false;
@@ -23,6 +21,14 @@ uint8_t mcu_init_stage = 0;
 uint8_t msg[MAX_BUFFER_LENGTH];
 uint8_t payload[MAX_BUFFER_LENGTH-TUYA_MCU_HEADER_SIZE];
 uint8_t messageToSend[MAX_BUFFER_LENGTH];
+SemaphoreHandle_t write_semaphore = NULL;
+
+
+
+void tuya_mcu_init() {
+    write_semaphore = xSemaphoreCreateMutex();
+}
+
 
 
 bool tuya_mcu_getTime(int dayOfWeek, int hour, int minutes)
@@ -110,20 +116,44 @@ void checkReset()
 
 uint8_t serial_write (const uint8_t* ptr, uint8_t len){
     
-    printf ("%s: ", __func__);
-    
-    for(uint8_t i = 0; i < len; i++) {
-        /* Auto convert CR to CRLF, ignore other LFs (compatible with Espressif SDK behaviour) */
-        if(((char *)ptr)[i] == '\r')
-            continue;
-        if(((char *)ptr)[i] == '\n')
-            uart_putc(0, '\r');
-        printf ("0x%02X ", ptr[i]);
-        uart_putc(0, ((char *)ptr)[i]);
+    if ( write_semaphore != NULL){
+        printf ("%s: ", __func__);
+       
+        /* See if we can obtain the semaphore.  If the semaphore is not
+         available wait 10 ticks to see if it becomes free. */
+        if( xSemaphoreTake( write_semaphore, ( TickType_t ) 100 ) == pdTRUE )
+        {
+            /* We were able to obtain the semaphore and can now access the
+             shared resource. */
+            
+            for(uint8_t i = 0; i < len; i++) {
+                /* Auto convert CR to CRLF, ignore other LFs (compatible with Espressif SDK behaviour) */
+                if(((char *)ptr)[i] == '\r')
+                    continue;
+                if(((char *)ptr)[i] == '\n')
+                    uart_putc(0, '\r');
+                printf ("0x%02X ", ptr[i]);
+                uart_putc(0, ((char *)ptr)[i]);
+            }
+            printf (": Sent %d bytes: ", len);
+                        
+            /* We have finished accessing the shared resource.  Release the
+             semaphore. */
+            xSemaphoreGive( write_semaphore );
+            
+            return len;
+        }
+        else
+        {
+            /* We could not obtain the semaphore and can therefore not access
+             the shared resource safely. */
+            printf ( "%s: unable to obtain semaphore\n", __func__);
+            return -1;
+        }
+    } else {
+        printf ( "%s: semaphore NULL\n", __func__);
+        return -1;
     }
-    printf (": Sent %d bytes: ", len);
-    return len;
-    
 }
 
 
@@ -293,7 +323,7 @@ void tuya_mcu_set_payload_length(uint8_t msg[], uint8_t payload_length)
     else
     {
         /* need to add what to do if length is too big */
-        
+        printf ("%s: Something went wrong, Payload too long: ", __func__);
     }
     //printf ("%s: End\n", __func__);
 }

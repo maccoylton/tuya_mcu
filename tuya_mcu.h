@@ -10,6 +10,8 @@
 #include <esp8266.h>
 #include <FreeRTOS.h>
 #include <task.h>
+#include <string.h>
+#include <semphr.h>
 
 #define MAX_BUFFER_LENGTH 128
 #define TUYA_MCU_HEADER_SIZE 7
@@ -24,6 +26,8 @@ extern uint8_t mcu_init_stage;
 extern uint8_t msg[]; /* used for recevie */
 extern uint8_t payload[];
 extern uint8_t messageToSend[]; /* used for send */
+
+extern SemaphoreHandle_t write_semaphore; /* used ot esnure mutiple writes don't clash */
 
 
 
@@ -139,6 +143,10 @@ bool getTimeAvailable();
 /* returns true of time is available, false otherwise*/
 
 bool tuya_mcu_msg_buffer_addbyte(uint8_t byte, uint8_t msg[]);
+
+
+void tuya_mcu_init();
+/* initailise stuff */
 
 
 #endif

@@ -60,15 +60,23 @@ extern bool externalTempSensor;
 //tuya_thermostat my_thermostat;
 
 void tuya_thermostat_handleDPStatusMsg(uint8_t msg[]);
-void tuya_thermostat_process_message(uint8_t msg[]);
-void tuya_thermostat_processTx(bool timeAvailable);
-void tuya_thermostat_sendTime(bool timeAvailable);
-float tuya_thermostat_getScheduleSetPointTemperature(int day, int period);
-void tuya_thermostat_getSchedulePeriod(int day, int period, SchedulePeriod_t* p);
-void tuya_thermostat_loop(void *args);
-void tuya_thermostat_setPower( bool on, bool updateMCU);
-void tuya_thermostat_emitChange(TUYA_Thermostat_change_type_t cmd);
-void tuya_thermostat_setSetPointTemp( float temp, bool updateMCU);
 
+void tuya_thermostat_process_message(uint8_t msg[]);
+
+void tuya_thermostat_processTx(bool timeAvailable);
+
+void tuya_thermostat_sendTime(bool timeAvailable);
+
+float tuya_thermostat_getScheduleSetPointTemperature(int day, int period);
+
+void tuya_thermostat_getSchedulePeriod(int day, int period, SchedulePeriod_t* p);
+
+void tuya_thermostat_loop(void *args);
+
+void tuya_thermostat_setPower( bool on, bool updateMCU);
+
+void tuya_thermostat_emitChange(TUYA_Thermostat_change_type_t cmd);
+
+void tuya_thermostat_setSetPointTemp( float temp, bool updateMCU);
 
 #endif
