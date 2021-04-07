@@ -8,7 +8,7 @@ https://developer.tuya.com/en/docs/iot/device-development/embedded-software-deve
 tuya_mcu contains the basic functions for communication with the tuya_mcu
   - timeAvailable is a global boolean that determines where or not your controller can provide the current time 
 
-tuya_thermostat contains fucntions for handling a theomstat besd on the tuya_mcu 
+tuya_thermostat contains fucntions for handling a thermostat besd on the tuya_mcu 
   - yuo need to provicde a funttion to handle how tuya_thermostat send change to your controller 
   - fucntion prototype if void tuya_thermostat_emitChange(TUYA_Thermostat_change_type_t cmd)
   
