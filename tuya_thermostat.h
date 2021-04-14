@@ -52,31 +52,28 @@ extern thermostat_mode_t mode;
 extern bool economyOn;
 extern bool locked;
 extern uint8_t schedule[54];
-WifiMode_t wifiMode;
 
 extern bool externalTempSensor;
 
 
 //tuya_thermostat my_thermostat;
 
-void tuya_thermostat_handleDPStatusMsg(uint8_t msg[]);
-
-void tuya_thermostat_process_message(uint8_t msg[]);
-
-void tuya_thermostat_processTx(bool timeAvailable);
-
-void tuya_thermostat_sendTime(bool timeAvailable);
+void tuya_device_handleDPStatusMsg(uint8_t msg[]);
 
 float tuya_thermostat_getScheduleSetPointTemperature(int day, int period);
 
 void tuya_thermostat_getSchedulePeriod(int day, int period, SchedulePeriod_t* p);
 
-void tuya_thermostat_loop(void *args);
-
 void tuya_thermostat_setPower( bool on, bool updateMCU);
 
-void tuya_thermostat_emitChange(TUYA_Thermostat_change_type_t cmd);
-
 void tuya_thermostat_setSetPointTemp( float temp, bool updateMCU);
+
+void tuya_device_loop (void *args);
+/* called each time mcu loop */
+
+void tuya_thermostat_emitChange(TUYA_Thermostat_change_type_t cmd);
+/* user provides this function to handle sening out changes from the MCU */
+
+
 
 #endif

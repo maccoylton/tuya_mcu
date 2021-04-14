@@ -22,6 +22,7 @@ extern bool    gotHeartbeat;
 extern bool    gotProdKey;
 extern bool    gotWifiMode;
 extern bool    timeAvailable;
+extern bool    canQuery;
 extern uint8_t mcu_init_stage;
 extern uint8_t msg[]; /* used for recevie */
 extern uint8_t payload[];
@@ -147,6 +148,15 @@ bool tuya_mcu_msg_buffer_addbyte(uint8_t byte, uint8_t msg[]);
 
 void tuya_mcu_init();
 /* initailise stuff */
+
+void tuya_mcu_loop(void *args);
+/* the main loop for reading and writing to the MCU */
+
+void tuya_device_loop (void *args);
+/* called each time the mcu_loops to do anytign device specific  */
+
+void tuya_device_handleDPStatusMsg(uint8_t msg[]);
+/* you need to write one of these for yuor particualr device */
 
 
 #endif
