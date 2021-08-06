@@ -33,6 +33,10 @@ SemaphoreHandle_t write_semaphore = NULL;
 
 void tuya_mcu_init() {
     write_semaphore = xSemaphoreCreateMutex();
+    
+    xTaskCreate(tuya_mcu_loop, "tuya_mcu_loop", 512 , NULL, tskIDLE_PRIORITY+1, NULL);
+    
+    vTaskDelete(NULL);
 }
 
 
@@ -543,7 +547,7 @@ void tuya_mcu_process_message(uint8_t msg[])
     
     switch(cmd)
     {
-        case MSG_CMD_HEARTBEAT:
+        case MSG_CMD_HEARTBEAT: /* 0x00 */
             printf (" Heartbeat: ");
             if (1 == payload_length)
             {
@@ -589,7 +593,7 @@ void tuya_mcu_process_message(uint8_t msg[])
                 printf (" INVALID heartbeat length: ");
             }
             break;
-        case MSG_CMD_QUERY_PROD_INFO:
+        case MSG_CMD_QUERY_PROD_INFO: /* 0x01 */
             printf (" Received Query Prod Info: ");
             tuya_mcu_print_message ( msg, true);
             
@@ -607,7 +611,7 @@ void tuya_mcu_process_message(uint8_t msg[])
             //               printf (" INVALID Prod Info length: ");
             //          }
             break;
-        case MSG_CMD_QUERY_WIFI_MODE:
+        case MSG_CMD_QUERY_WIFI_MODE:  /* 0x02 */
             printf (" Received Query Wifi mode, Mode: ");
             
             gotWifiMode = true;
@@ -633,13 +637,13 @@ void tuya_mcu_process_message(uint8_t msg[])
             }
             
             break;
-        case MSG_CMD_REPORT_WIFI_STATUS:
+        case MSG_CMD_REPORT_WIFI_STATUS: /* 0x03 */
             printf (" Recevied Report WiFi status: " );
             canQuery = true;
             tuya_mcu_send_cmd (MSG_CMD_QUERY_DEVICE_STATUS);
             if (mcu_init_stage == 4) mcu_init_stage=5;
                         break;
-        case MSG_CMD_RESET_WIFI_SWITCH_NET_CFG:
+        case MSG_CMD_RESET_WIFI_SWITCH_NET_CFG: /* 0x04 */
             printf (" Reset Wifi: ");
             tuya_mcu_send_cmd (MSG_CMD_RESET_WIFI_SWITCH_NET_CFG);
             
@@ -650,7 +654,7 @@ void tuya_mcu_process_message(uint8_t msg[])
              }
              */
             break;
-        case MSG_CMD_DP_STATUS:
+        case MSG_CMD_DP_STATUS: /* 0x07 */
             printf (" DP Status: ");
             if (tuya_mcu_get_payload_length(msg))
             {
@@ -662,7 +666,7 @@ void tuya_mcu_process_message(uint8_t msg[])
                 printf (" Initialization Phase complete ");
             }
             break;
-        case MSG_CMD_OBTAIN_LOCAL_TIME:
+        case MSG_CMD_OBTAIN_LOCAL_TIME: /* 0x1c */
             printf (" Obtain Local Time: ");
             tuya_mcu_sendTime(timeAvailable);
             break;
