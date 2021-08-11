@@ -216,7 +216,7 @@ bool tuya_mcu_msg_buffer_addbyte(uint8_t byte, uint8_t msg[])
     
     lastMS = newLastMS;
     
-    if (0 == currentByte)
+    if (E_MAGIC1 == currentByte)
     {
         if (0x55 == byte)
         {
@@ -226,7 +226,7 @@ bool tuya_mcu_msg_buffer_addbyte(uint8_t byte, uint8_t msg[])
         }
         
     }
-    else if (1 == currentByte)
+    else if (E_MAGIC2 == currentByte)
     {
         if (0xAA == byte)
         {
@@ -244,8 +244,8 @@ bool tuya_mcu_msg_buffer_addbyte(uint8_t byte, uint8_t msg[])
     {
         msg[currentByte] = byte;
         
-        if (5 == currentByte){
-            dataLength = msg[4] * 0x100 + msg[5];
+        if (E_PAYLOAD_LENGTH_LO == currentByte){
+            dataLength = msg[E_PAYLOAD_LENGTH_HI] * 0x100 + msg[E_PAYLOAD_LENGTH_LO];
             //printf (" : Got length bytes, length %d ", dataLength);
         }
         if (currentByte >= 6u && dataLength+6u == currentByte)
@@ -300,10 +300,37 @@ void tuya_mcu_print_message (uint8_t msg[], bool valid){
     
     
     for (uint8_t i=0 ;  i < message_length ; i++)
+    {
+        switch (i) {
+            case E_MAGIC1:
+                printf ("MB 1:");
+                break;
+            case E_MAGIC2:
+                printf (" MB 2:");
+                break;
+            case E_VERSION:
+                printf (" Version:");
+                break;
+            case E_CMD:
+                printf (" CMD:");
+                break;
+            case E_PAYLOAD_LENGTH_HI:
+                printf (" Length HI:");
+                break;
+            case E_PAYLOAD_LENGTH_LO:
+                printf (" Length Low:");
+                break;
+                
+            default:
+                break;
+        }
+        if (i == message_length-1)
+            printf (" Checksum:");
         printf (" 0x%02X", msg[i]);
-    printf (": End: ");
-    
+        printf (": End: ");
+    }
 }
+
 
 
 bool tuya_mcu_message_is_valid(uint8_t msg[])
