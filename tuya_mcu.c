@@ -24,9 +24,10 @@ uint32_t HeartbeatDelay = 3000;
 
 
 /* declare these as global to avoid fragmentation */
-uint8_t msg[MAX_BUFFER_LENGTH];
-uint8_t payload[MAX_BUFFER_LENGTH-TUYA_MCU_HEADER_SIZE];
-uint8_t messageToSend[MAX_BUFFER_LENGTH];
+
+uint8_t msg[MAX_RECEIVE_BUFFER_LENGTH];
+uint8_t payload[MAX_RECEIVE_BUFFER_LENGTH-TUYA_MCU_HEADER_SIZE];
+uint8_t messageToSend[MAX_SEND_BUFFER_LENGTH];
 SemaphoreHandle_t write_semaphore = NULL;
 
 
@@ -36,7 +37,6 @@ void tuya_mcu_init() {
     
     xTaskCreate(tuya_mcu_loop, "tuya_mcu_loop", 512 , NULL, tskIDLE_PRIORITY+1, NULL);
     
-    vTaskDelete(NULL);
 }
 
 
@@ -47,9 +47,9 @@ bool tuya_mcu_getTime(int dayOfWeek, int hour, int minutes)
     bool gotTime = false;
     struct tm* new_time = NULL;
     time_t tnow = (time_t)-1;
-    if (timeAvailable)
+    if (timeAvailable == true)
     {
-        struct timezone tz = {0};
+        struct timezone tz = {1*60, 0};
         struct timeval tv = {0};
         
         gettimeofday(&tv, &tz);
@@ -86,10 +86,10 @@ void tuya_mcu_sendTime(bool timeAvailable)
     static uint8_t sendTimeCmd[8]= {01,00,00,00,00,00,00,00};
     printf ("%s: timeAvailbale: %s, can query: %s", __func__, timeAvailable ? "True" : "False", canQuery ? "True" : "False");
     struct tm* new_time = NULL;
-    if (timeAvailable)
+    if (timeAvailable ==true)
     {
-        struct timezone tz = {0};
-        struct timeval tv = {0};
+        struct timezone tz; // = {1*60, 0};
+        struct timeval tv; //= {0};
         
         gettimeofday(&tv, &tz);
         
@@ -99,23 +99,29 @@ void tuya_mcu_sendTime(bool timeAvailable)
         static time_t nexttv = 0;
         if (nexttv < tv.tv_sec && canQuery)
         {
+            printf ("getting local time ");
             nexttv = tv.tv_sec + 3600; // update every hour
             new_time = localtime(&tnow);
+            if (new_time != NULL)
+            {
+                // weekday: 0 = monday, 6 = sunday
+                printf ( " got new_time ");
+                sendTimeCmd[7] = (new_time->tm_wday == 0 ? 7 : new_time->tm_wday);
+                sendTimeCmd[6] = new_time->tm_sec;
+                sendTimeCmd[5] = new_time->tm_min;
+                sendTimeCmd[4] = new_time->tm_hour;
+                sendTimeCmd[3] = new_time->tm_mday;
+                sendTimeCmd[2] = new_time->tm_mon  + 1;
+                sendTimeCmd[1] = new_time->tm_year % 100;
+                tuya_mcu_send_message(MSG_CMD_OBTAIN_LOCAL_TIME, sendTimeCmd, 8);
+            } else {
+                printf ( " NOT got new_time ");
+            }
         }
+        printf ("time since epoch %ld, ", (long int)tnow );
     }
     
-    if (new_time != NULL)
-    {
-        // weekday: 0 = monday, 6 = sunday
-        sendTimeCmd[7] = (new_time->tm_wday == 0 ? 7 : new_time->tm_wday);
-        sendTimeCmd[6] = new_time->tm_sec;
-        sendTimeCmd[5] = new_time->tm_min;
-        sendTimeCmd[4] = new_time->tm_hour;
-        sendTimeCmd[3] = new_time->tm_mday;
-        sendTimeCmd[2] = new_time->tm_mon  + 1;
-        sendTimeCmd[1] = new_time->tm_year % 100;
-        tuya_mcu_send_message(MSG_CMD_OBTAIN_LOCAL_TIME, sendTimeCmd, 8);
-    }
+
     printf (" End\n");
 }
 
@@ -151,7 +157,7 @@ void reset()
 void checkReset()
 {
     //printf ("%s: ", __func__);
-    if (resetBuffer)
+    if (resetBuffer == true )
     {
         printf ("Resetting: ");
         currentByte = 0;
@@ -205,7 +211,7 @@ uint8_t serial_write (const uint8_t* ptr, uint8_t len){
 }
 
 
-bool tuya_mcu_msg_buffer_addbyte(uint8_t byte, uint8_t msg[])
+/* bool tuya_mcu_msg_buffer_addbyte(uint8_t byte, uint8_t msg[])
 {
     //printf ("%s: Start, byte:0x%02X\n", __func__, byte);
     
@@ -265,6 +271,7 @@ bool tuya_mcu_msg_buffer_addbyte(uint8_t byte, uint8_t msg[])
     
     return false;
 }
+ */
 
 
 uint8_t tuya_mcu_get_msg_length(uint8_t msg[])
@@ -296,8 +303,8 @@ void tuya_mcu_set_checksum(uint8_t msg[])
 
 void tuya_mcu_print_message (uint8_t msg[], bool valid){
     
-    uint8_t message_length = MAX_BUFFER_LENGTH;
-    if (valid) {
+    uint8_t message_length = MAX_SEND_BUFFER_LENGTH;
+    if (valid == true) {
         message_length = tuya_mcu_get_msg_length (msg);
     }
     printf ("Message: ");
@@ -324,15 +331,16 @@ void tuya_mcu_print_message (uint8_t msg[], bool valid){
             case E_PAYLOAD_LENGTH_LO:
                 printf (" Length Low:");
                 break;
-                
+            case E_PAYLOAD:
+                printf ("\nPayload: ");
             default:
                 break;
         }
         if (i == message_length-1)
             printf (" Checksum:");
         printf (" 0x%02X", msg[i]);
-        printf (": End: ");
     }
+    printf (": End: ");
 }
 
 
@@ -391,7 +399,7 @@ uint8_t tuya_mcu_get_payload(uint8_t msg[], uint8_t payload[])
 void tuya_mcu_set_payload_length(uint8_t msg[], uint8_t payload_length)
 {
     //printf ("%s: Start\n", __func__);
-    if (payload_length <= MAX_BUFFER_LENGTH - TUYA_MCU_HEADER_SIZE)
+    if (payload_length <= (MAX_SEND_BUFFER_LENGTH - TUYA_MCU_HEADER_SIZE))
     {
         msg[E_PAYLOAD_LENGTH_HI] = payload_length >> 8;
         msg[E_PAYLOAD_LENGTH_LO] = payload_length & 0xff;
@@ -408,7 +416,7 @@ void tuya_mcu_set_payload_length(uint8_t msg[], uint8_t payload_length)
 void tuya_mcu_set_payload(uint8_t msg[], uint8_t* payload, uint8_t payload_length)
 {
     //printf ("%s: Start\n", __func__);
-    if (payload_length <= MAX_BUFFER_LENGTH - TUYA_MCU_HEADER_SIZE)
+    if (payload_length <= (MAX_SEND_BUFFER_LENGTH - TUYA_MCU_HEADER_SIZE))
     {
         tuya_mcu_set_payload_length ( msg, payload_length);
         memcpy(&msg[E_PAYLOAD], payload, payload_length);
@@ -433,7 +441,7 @@ void tuya_mcu_send_cmd(uint8_t cmd)
     tuya_mcu_set_payload_length(messageToSend,0);
     tuya_mcu_set_checksum (messageToSend);
     
-    if (tuya_mcu_message_is_valid(messageToSend))
+    if (tuya_mcu_message_is_valid(messageToSend) == true)
     {
         //tuya_mcu_print_message (msg, true);
         serial_write(messageToSend, tuya_mcu_get_msg_length (messageToSend));
@@ -448,7 +456,7 @@ void tuya_mcu_send_message(uint8_t cmd, uint8_t payload[], uint8_t payload_lengt
 {
     printf ("%s: ", __func__);
     
-    uint8_t messageToSend[MAX_BUFFER_LENGTH];
+    uint8_t messageToSend[MAX_SEND_BUFFER_LENGTH];
     
     messageToSend[E_MAGIC1] = 0x55;
     messageToSend[E_MAGIC2] = 0xaa;
@@ -458,7 +466,7 @@ void tuya_mcu_send_message(uint8_t cmd, uint8_t payload[], uint8_t payload_lengt
     tuya_mcu_set_payload ( messageToSend, payload, payload_length);
     tuya_mcu_set_checksum (messageToSend);
     
-    if (tuya_mcu_message_is_valid(messageToSend))
+    if (tuya_mcu_message_is_valid(messageToSend) == true)
     {
         serial_write(messageToSend, tuya_mcu_get_msg_length (messageToSend));
     }
@@ -474,7 +482,7 @@ void tuya_mcu_updateWifiState()
     static uint32_t timeLastSend = 0;
     uint32_t timeNow = tuya_mcu_get_millis();
     
-    if (timeNow - timeLastSend > 1000)
+    if ((timeNow - timeLastSend) > 1000)
     {
         timeLastSend = timeNow;
         
@@ -509,36 +517,22 @@ void tuya_mcu_sendHeartbeat()
 {
     printf ("%s: ", __func__);
     
-    static uint32_t timeLastSend = 0;
-    uint32_t timeNow = tuya_mcu_get_millis();
-    
-    //printf ("time last %d, time now: %d, delay: %d, diff: %d : got heartbeat %s\n", timeLastSend, timeNow, delay, timeNow - timeLastSend, gotHeartbeat ? "True" : "False");
-    if (timeNow - timeLastSend > HeartbeatDelay)
-    {
-        timeLastSend = timeNow;
-        if (gotHeartbeat)
-            HeartbeatDelay = 10000;
-        else {
-	    printf ( "%s: No got HeartBeat \n", __func__); 	
-            HeartbeatDelay = 3000;
-        }
-
-        tuya_mcu_send_cmd(MSG_CMD_HEARTBEAT);
-    }
+    tuya_mcu_send_cmd(MSG_CMD_HEARTBEAT);
 }
+
 
 
 void tuya_mcu_setWifiState(WifiState_t newState)
 {
     printf (" current state: %d: new state: %d:", wifiState, newState );
     
-    if (wifiState != newState || sendWifiStateMsg)
+    if (wifiState != newState || sendWifiStateMsg == true)
     {
         wifiState = newState;
         
         sendWifiStateMsg = true;
         
-        if (gotWifiMode)
+        if (gotWifiMode == true)
         {
             payload[0] = (uint8_t)wifiState;
             tuya_mcu_send_message (MSG_CMD_REPORT_WIFI_STATUS, payload, 1);
@@ -586,6 +580,7 @@ void tuya_mcu_process_message(uint8_t msg[])
                     if (!gotHeartbeat)
                     {
                         gotHeartbeat = true;
+                        HeartbeatDelay = 10000;
                         mcu_init_stage = 2;
                         
                         if (!gotProdKey)
@@ -599,8 +594,9 @@ void tuya_mcu_process_message(uint8_t msg[])
                         /* do nothing  or shudl we send a heart beat*/
                     }
                 } else { /* payload[0]=0 */
-                    if (gotHeartbeat){ /* if we alresdy have the heartbeat and we get another zero then MCU has reset */
+                    if (gotHeartbeat == true){ /* if we alresdy have the heartbeat and we get another zero then MCU has reset */
                         gotHeartbeat = false;
+                        HeartbeatDelay = 3000;
                         gotProdKey = false;
                         mcu_init_stage = 1;
                         printf (" MCU HeartBeat 0, resetting ");
@@ -683,7 +679,7 @@ void tuya_mcu_process_message(uint8_t msg[])
             break;
         case MSG_CMD_DP_STATUS: /* 0x07 */
             printf (" DP Status: ");
-            if (tuya_mcu_get_payload_length(msg))
+            if (tuya_mcu_get_payload_length(msg) > 0)
             {
                 tuya_device_handleDPStatusMsg(msg);
             }
@@ -705,24 +701,98 @@ void tuya_mcu_process_message(uint8_t msg[])
 }
 
 
+/*
+ void tuya_mcu_processRx()
+ {
+ printf ("%s: \n", __func__);
+ bool hasMsg = false;
+ if (serial_available())
+ {
+ while (serial_available())
+ {
+ hasMsg = tuya_mcu_msg_buffer_addbyte(serial_read(), msg);
+ if (hasMsg)
+ {
+ tuya_mcu_process_message(msg);
+ printf ( " MCU Init Stage: %d ", mcu_init_stage );
+ }
+ }
+ }
+ printf (":End\n");
+ }
+ */
+
+
 void tuya_mcu_processRx()
 {
-    printf ("%s: \n", __func__);
-    bool hasMsg = false;
-    if (serial_available())
+    static uint8_t received_bytes = 0;
+    uint8_t offset = 0;
+    
+    printf ("\n\n%s: ", __func__);
+    
+    while (serial_available() > 0 && received_bytes < MAX_RECEIVE_BUFFER_LENGTH )
     {
-        while (serial_available())
-        {
-            hasMsg = tuya_mcu_msg_buffer_addbyte(serial_read(), msg);
-            if (hasMsg)
-            {
-                tuya_mcu_process_message(msg);
-                printf ( " MCU Init Stage: %d ", mcu_init_stage );
-            }
+        msg[received_bytes] = serial_read();
+        received_bytes++;
+    }
+    printf (" Recevived %d bytes", received_bytes);
+
+    while  ((received_bytes - offset) >= TUYA_MCU_HEADER_SIZE ){
+        
+        if (msg[offset+E_MAGIC1] != 0x55) {
+            printf (" Dropping 0x%02X: ", msg[offset+E_MAGIC1]);
+            offset++;
+            continue;
+        }
+        if (msg[offset+E_MAGIC2] != 0xAA) {
+            printf (" Dropping 0x%02X: ", msg[offset+E_MAGIC2]);
+            offset++;
+            continue;
+        }
+        
+        
+        uint8_t message_length = tuya_mcu_get_msg_length (&msg[offset]);
+
+        
+        if ( (offset + message_length) > received_bytes) {
+            /* if we don't have enouh  bytes left in the buffer for the full message then save what's left and go and read some more bytes */
+            printf (" Offset + message length: %d + %d, greaer than received bytes: %d, copying rest of buffer and reading more bytes\n", offset, message_length, received_bytes);
+            break;
+        }
+        
+        
+        uint8_t checksum = tuya_mcu_calc_checksum(&msg[offset]);
+        if (checksum != msg[offset+message_length-1]){
+            printf (" invalid checskum, calculated %d, received %d, length: %d: ", checksum, (uint8_t) msg[offset+message_length-1], message_length );
+            tuya_mcu_print_message (&msg[offset], true);
+            offset +=3;
+            continue;
+        }
+        
+        printf (" Message length; %d, offset: %d", message_length, offset);
+        tuya_mcu_process_message(&msg[offset]);
+        offset += message_length;
+        printf ( " MCU Init Stage: %d ", mcu_init_stage );
+
+    }
+    
+    received_bytes -= offset ;
+    
+    if (received_bytes > 0){
+        uint8_t i;
+        printf (" Bytes left in buffer: %d, Bytes processed from offset: %d ", received_bytes, offset);
+        for ( i = 0 ; i < received_bytes; i++) {
+            msg[i]=msg[i+offset];
+            printf (" 0x%02X", msg[i] );
+        }
+        for ( i = received_bytes; i < offset + received_bytes; i++){
+            msg[i]=0;
         }
     }
-    printf (":End\n");
+    printf (":End\n\n");
+    
 }
+
 
 
 void tuya_mcu_loop(void *args)

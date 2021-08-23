@@ -13,7 +13,9 @@
 #include <string.h>
 #include <semphr.h>
 
-#define MAX_BUFFER_LENGTH 128
+#define MAX_RECEIVE_BUFFER_LENGTH 255
+#define MAX_SEND_BUFFER_LENGTH 128
+
 #define TUYA_MCU_HEADER_SIZE 7
 
 extern bool sendWifiStateMsg;
@@ -141,7 +143,7 @@ void tuya_mcu_setWifiState(WifiState_t newState);
 bool tuya_mcu_getTime(int dayOfWeek, int hour, int minutes);
 
 bool getTimeAvailable();
-/* returns true of time is available, false otherwise*/
+/* returns true if time is available, false otherwise*/
 
 bool tuya_mcu_msg_buffer_addbyte(uint8_t byte, uint8_t msg[]);
 
