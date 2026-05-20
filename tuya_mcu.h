@@ -85,7 +85,7 @@ typedef enum
 } WifiMode_t;
 
 
-uint8_t tuya_mcu_get_msg_length(uint8_t msg[]);
+uint16_t tuya_mcu_get_msg_length(uint8_t msg[]);
 /* calculate the message legnth form the heaer length + the payload length */
 
 uint8_t tuya_mcu_calc_checksum(uint8_t msg[]);
@@ -101,7 +101,7 @@ bool tuya_mcu_message_is_valid(uint8_t msg[]);
 uint8_t tuya_mcu_get_command(uint8_t msg[]);
 /* returns the command contained in message */
 
-uint8_t tuya_mcu_get_payload_length(uint8_t msg[]);
+uint16_t tuya_mcu_get_payload_length(uint8_t msg[]);
 /* returns the legth of the payload contained in msg */
 
 void tuya_mcu_set_payload_length(uint8_t msg[], uint8_t payload_length);
@@ -117,12 +117,12 @@ bool serial_available();
 
 int serial_read ();
 
-uint8_t serial_write (const uint8_t* ptr, uint8_t len);
+int serial_write (const uint8_t* ptr, uint8_t len);
 
 void tuya_mcu_set_payload (uint8_t msg[], uint8_t payload[], uint8_t payload_length);
 /* add the payload to the message */
 
-uint8_t tuya_mcu_get_payload(uint8_t msg[], uint8_t payload[]);
+uint16_t tuya_mcu_get_payload(uint8_t msg[], uint8_t payload[]);
 /* copy the payload from the message to payload and return the length of the payload */
 
 uint8_t tuya_mcu_get_version(uint8_t msg[]);
@@ -140,7 +140,7 @@ long long tuya_mcu_get_millis() ;
 
 void tuya_mcu_setWifiState(WifiState_t newState);
 
-bool tuya_mcu_getTime(int dayOfWeek, int hour, int minutes);
+bool tuya_mcu_getTime(int *dayOfWeek, int *hour, int *minutes);
 
 bool getTimeAvailable();
 /* returns true if time is available, false otherwise*/

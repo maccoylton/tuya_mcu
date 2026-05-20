@@ -10,6 +10,17 @@
 #include <tuya_thermostat.h>
 #include <string.h>
 
+#define LOG_ERR    1
+#define LOG_ACTION 2
+#define LOG_EVENT  3
+#define LOG_WIFI   4
+#define LOG_MEM    5
+#define LOG_FLOW   6
+#define LOG_SNTP   7
+
+extern int log_level;
+#define LOG(level, ...) do { if (level <= log_level) { printf(__VA_ARGS__); } } while(0)
+
 /* external variables */
 bool powerOn = false;
 float setPointTemp = 20.0f;
@@ -50,7 +61,7 @@ void tuya_thermostat_getSchedulePeriod(int day, int period, SchedulePeriod_t* p)
     
     int i = 0;
     int j = period;
-    if (i > 4)
+    if (day > 4)
         i = day - 4;
     
     p->minute = schedule[i * 18 + j * 3 + 0];
@@ -77,14 +88,13 @@ void tuya_thermostat_setPower( bool on, bool updateMCU)
 {
     static uint8_t setPowerCmd[5] = {0x01, 0x01, 0x00, 0x01, 0x00};
     
-    printf ("%s: Curent State: %d:  New State %d: update MCU %d ", __func__, powerOn, on, updateMCU);
+    LOG(LOG_EVENT, "%s: Current State: %d, New State: %d, update MCU: %d\n", __func__, powerOn, on, updateMCU);
     
     if (on != powerOn)
     {
         powerOn = on;
         if (updateMCU)
         {
-            // send change to mcu
             setPowerCmd[4] = (uint8_t)(powerOn ? 1 : 0);
             tuya_mcu_send_message(MSG_CMD_DP_CMD, setPowerCmd, 5);
         } else {
@@ -99,49 +109,44 @@ void tuya_thermostat_setSetPointTemp( float temp, bool updateMCU)
 {
     static uint8_t setSetpointCmd[8] = {0x02, 0x02, 0x00, 0x04, 0x00, 0x00, 0x00, 0x00};
     
-    printf ("%s: current target: %2.1f, new target: %2.1f: update MCU: %s ", __func__, setPointTemp, temp, updateMCU ? "True" : "False");
+    LOG(LOG_EVENT, "%s: current target: %2.1f, new target: %2.1f, update MCU: %s\n", __func__, setPointTemp, temp, updateMCU ? "True" : "False");
     
     if (temp != setPointTemp)
     {
         setPointTemp = temp;
         if (updateMCU)
         {
-            // send change to mcu
-            //RX: 55 aa 01 07 00 08 02 02 00 04 00 00 00 24 3c
             setSetpointCmd[7] = (uint8_t)(setPointTemp*2 + 0.5);
             tuya_mcu_send_message(MSG_CMD_DP_CMD, setSetpointCmd, 8);
         } else {
             tuya_thermostat_emitChange(CHANGE_TYPE_SETPOINT_TEMP);
         }
     }
-    printf (" End\n");
     
 }
 
 void tuya_thermostat_setInternalTemp( float temp)
 {
-    printf (" temp: %2.1f, last inernal temp:%2.1f: ", temp, internalTemp);
+    LOG(LOG_EVENT, "%s: temp: %2.1f, last internal temp: %2.1f\n", __func__, temp, internalTemp);
     
     if (temp != internalTemp)
     {
         internalTemp = temp;
         tuya_thermostat_emitChange(CHANGE_TYPE_INTERNAL_TEMP);
     }
-    //printf (" End\n");
     
 }
 
 
 void tuya_thermostat_setExternalTemp( float temp)
 {
-    printf ("%s: temp:%f2.2, last external temp:%f2.2\n", __func__, temp, externalTemp);
+    LOG(LOG_EVENT, "%s: temp: %f, last external temp: %f\n", __func__, temp, externalTemp);
     
     if (temp != externalTemp)
     {
         externalTemp = temp;
         tuya_thermostat_emitChange(CHANGE_TYPE_EXTERNAL_TEMP);
     }
-    printf ("%s: End\n", __func__);
     
 }
 
@@ -149,13 +154,12 @@ void tuya_thermostat_setExternalTemp( float temp)
 void tuya_thermostat_setMode(thermostat_mode_t m, bool updateMCU)
 {
     static uint8_t setModeCmd[5] = {0x04, 0x04, 0x00, 0x01, 00};
-    printf ("%s: current mode %d; new mode %d: update MCU %s\n", __func__, mode, m, updateMCU ? "True" : "False");
+    LOG(LOG_EVENT, "%s: current mode %d, new mode %d, update MCU %s\n", __func__, mode, m, updateMCU ? "True" : "False");
     if (m != mode)
     {
         mode = m;
         if (updateMCU)
         {
-            // send change to mcu
             setModeCmd[4] = mode;
             tuya_mcu_send_message(MSG_CMD_DP_CMD, setModeCmd, 5);
             
@@ -163,7 +167,6 @@ void tuya_thermostat_setMode(thermostat_mode_t m, bool updateMCU)
             tuya_thermostat_emitChange(CHANGE_TYPE_MODE);
         }
     }
-    printf ("%s: End\n", __func__);
     
 }
 
@@ -172,14 +175,13 @@ void tuya_thermostat_setEconomy( bool econ, bool updateMCU)
 {
     static uint8_t setEconomyCmd[5] = {0x05, 0x01, 0x00, 0x01,0};
     
-    printf ("%s: current %d, new %d, update MCU %s", __func__, economyOn, econ, updateMCU ? "True" : "False");
+    LOG(LOG_EVENT, "%s: current %d, new %d, update MCU %s\n", __func__, economyOn, econ, updateMCU ? "True" : "False");
     
     if (econ != economyOn)
     {
         economyOn = econ;
         if(updateMCU)
         {
-            // send change to mcu
             setEconomyCmd[4] = (uint8_t)( economyOn ? 1 : 0);
             tuya_mcu_send_message(MSG_CMD_DP_CMD, setEconomyCmd, 5);
         } else
@@ -187,7 +189,6 @@ void tuya_thermostat_setEconomy( bool econ, bool updateMCU)
             tuya_thermostat_emitChange(CHANGE_TYPE_ECONOMY);
         }
     }
-    printf ("%s: End\n", __func__);
     
 }
 
@@ -195,21 +196,20 @@ void tuya_thermostat_setEconomy( bool econ, bool updateMCU)
 void tuya_thermostat_setLock(bool lock, bool updateMCU)
 {
     static uint8_t setLockCmd[5] = {0x06, 0x01, 0x00, 0x01, 0x00};
-    printf ("%s: Start\n", __func__);
+    LOG(LOG_EVENT, "%s: lock %d, updateMCU %s\n", __func__, lock, updateMCU ? "True" : "False");
     
     if (lock != locked)
     {
         locked = lock;
         if(updateMCU)
         {
-            // send change to mcu
             setLockCmd[4] = (uint8_t)(locked ? 1 : 0);
             tuya_mcu_send_message(MSG_CMD_DP_CMD, setLockCmd, 5);
         } else {
             tuya_thermostat_emitChange(CHANGE_TYPE_LOCK);
         }
     }
-    printf ("%s: End\n", __func__);
+    
 }
 
 
@@ -217,14 +217,13 @@ void tuya_thermostat_setSchedule(const uint8_t* s, uint8_t length, bool updateMC
 {
     static  uint8_t setScheduleCmd[58]= {0x65, 0x00, 0x00, 0x36, 0};
     
-    printf ("%s: Start\n", __func__);
+    LOG(LOG_EVENT, "%s:\n", __func__);
     
     if (54 != length)
         return;
     
     bool changed = false;
     
-    //setSchedule weekday, sat, sun x 6 times
     for (int i = 0; i < length; ++i)
     {
         if (s[i] != schedule[i])
@@ -238,8 +237,6 @@ void tuya_thermostat_setSchedule(const uint8_t* s, uint8_t length, bool updateMC
         haveSchedule = true;
         if (updateMCU)
         {
-            // send change to mcu
-            //payload = {0x65, 0x00, 0x00, 0x36, 0};
             uint8_t* ptr = setScheduleCmd + 4;
             for (int i = 0; i < 54; ++i)
             {
@@ -248,39 +245,29 @@ void tuya_thermostat_setSchedule(const uint8_t* s, uint8_t length, bool updateMC
             tuya_mcu_send_message(MSG_CMD_DP_CMD, setScheduleCmd, 58);
         }
     }
-    printf ("%s: End\n", __func__);
+    
 }
 
 
 void tuya_device_handleDPStatusMsg(uint8_t msg[])
 {
-    //printf (" %s: ", __func__);
-    
     uint8_t payload_length = tuya_mcu_get_payload(msg, payload);
     
-    
-    //printf (" Payload, length %d: ", payload_length);
-    //for (uint8_t i = 0; i < payload_length ; i++)
-    //{
-    //    printf(" 0x%02X", payload[i]);
-    //}
     switch(payload[0])
     {
-        case CHANGE_TYPE_POWER: // power on/off (byte 4)
+        case CHANGE_TYPE_POWER:
         {
-            printf ("Type: Power\n");
+            LOG(LOG_EVENT, "%s: Type: Power\n", __func__);
             
-            //RX: 55 aa 01 07 00 05 01 01 00 01 01 10
-            if (5 == payload_length    )
+            if (5 == payload_length)
             {
                 tuya_thermostat_setPower(1 == payload[4], false);
             }
         }
             break;
-        case CHANGE_TYPE_SETPOINT_TEMP: // set point temp
+        case CHANGE_TYPE_SETPOINT_TEMP:
         {
-            //RX: 55 aa 01 07 00 08 02 02 00 04 00 00 00 2e 45
-            printf ("Type: SETPOINT_TEMP\n");
+            LOG(LOG_EVENT, "%s: Type: SETPOINT_TEMP\n", __func__);
             
             if (8 == payload_length)
             {
@@ -289,16 +276,14 @@ void tuya_device_handleDPStatusMsg(uint8_t msg[])
             
         }
             break;
-        case CHANGE_TYPE_INTERNAL_TEMP: // temperature
+        case CHANGE_TYPE_INTERNAL_TEMP:
         {
-            //RX: 55 aa 01 07 00 08 03 02 00 04 00 00 00 24 3c
-            printf ("Type: Internal Temp\n");
+            LOG(LOG_EVENT, "%s: Type: Internal Temp\n", __func__);
             if (externalTempSensor)
             {
-                printf ("Type: Inernal Temp Ignoring as using external temp\n");
+                LOG(LOG_EVENT, "%s: Ignoring internal temp, using external temp\n", __func__);
             }
             else {
-                /* no external temp sensor so use internal  */
                 if (8 == payload_length)
                 {
                     tuya_thermostat_setInternalTemp(payload[7]/2.0f);
@@ -307,10 +292,9 @@ void tuya_device_handleDPStatusMsg(uint8_t msg[])
             }
         }
             break;
-        case CHANGE_TYPE_MODE: // mode (schedule = 0 / manual = 1)
+        case CHANGE_TYPE_MODE:
         {
-            //RX: 55 aa 01 07 00 05 04 04 00 01 00 15
-            printf ("Type: Mode\n");
+            LOG(LOG_EVENT, "%s: Type: Mode\n", __func__);
             if (5 == payload_length)
             {
                 tuya_thermostat_setMode(payload[4] ? MODE_MANUAL : MODE_SCHEDULE, false);
@@ -319,22 +303,18 @@ void tuya_device_handleDPStatusMsg(uint8_t msg[])
             
         }
             break;
-        case CHANGE_TYPE_ECONOMY: // economy
+        case CHANGE_TYPE_ECONOMY:
         {
-            //RX: 55 aa 01 07 00 05 05 01 00 01 00 13
-            printf ("Type: Economy\n");
+            LOG(LOG_EVENT, "%s: Type: Economy\n", __func__);
             if (5 == payload_length)
             {
                 tuya_thermostat_setEconomy(1 == payload[4], false);
             }
         }
             break;
-        case CHANGE_TYPE_LOCK: // lock
+        case CHANGE_TYPE_LOCK:
         {
-            //RX: 55 aa 01 07 00 05 06 01 00 01 00 14
-            //    TX: 55 AA 00 06 00 05 06 01 00 01 01 00
-            
-            printf ("Type: Lock\n");
+            LOG(LOG_EVENT, "%s: Type: Lock\n", __func__);
             
             if (5 == payload_length)
             {
@@ -342,14 +322,9 @@ void tuya_device_handleDPStatusMsg(uint8_t msg[])
             }
         }
             break;
-        case 0x65: // schedule
+        case 0x65:
         {
-            // RX: 55 aa 01 07 00 3a 65
-            // 00 00 36 00
-            // 06 28 00 08 1e 1e b 1e 1e d 1e 00 11 2c 00 16 1e 00
-            // 06 28 00 08 28 1e b 28 1e d 28 00 11 28 00 16 1e 00
-            // 06 28 00 08 28 1e b 28 1e d 28 00 11 28 00 16 1e f
-            printf ("Type: Schedule\n");
+            LOG(LOG_EVENT, "%s: Type: Schedule\n", __func__);
             
             if (58  == payload_length)
             {
@@ -357,33 +332,26 @@ void tuya_device_handleDPStatusMsg(uint8_t msg[])
             }
         }
             break;
-        case CHANGE_TYPE_EXTERNAL_TEMP: // floor temp
+        case CHANGE_TYPE_EXTERNAL_TEMP:
         {
-            // RX: 55 aa 01 07 00 08 66 02 00 04 00 00 00 00 7b
             if (externalTempSensor) {
-                /*  external temp sensor is present */
-                printf ("Type: External Temp\n");
+                LOG(LOG_EVENT, "%s: Type: External Temp\n", __func__);
                 if (8 == payload_length)
                 {
                     tuya_thermostat_setExternalTemp(payload[7]/2.0f);
                 }
             } else {
-                printf ("Type: External Temp Ignoring as using internal temp\n");
+                LOG(LOG_EVENT, "%s: Ignoring external temp, using internal temp\n", __func__);
             }
         }
             break;
-        case 0x68: // ??
+        case 0x68:
         {
-            // RX: 55 aa 01 07 00 05 68 01 00 01 01 77
-            printf ("Type: Unknown\n");
-            if (5 == payload_length)
-            {
-            }
-            
+            LOG(LOG_WIFI, "%s: Type: Unknown (0x68)\n", __func__);
         }
             break;
         default:
-            printf ("Type: Default Unknown\n");
+            LOG(LOG_ERR, "%s: Type: Default Unknown (0x%02X)\n", __func__, payload[0]);
     }
     
 }
@@ -392,12 +360,11 @@ void tuya_device_handleDPStatusMsg(uint8_t msg[])
 
 void tuya_device_loop (void *args){
     
+    static uint32_t timeLastScheduleUpdate = 0;
 
-    // update scheduleCurrentDay  and scheduleCurrentPeriod
     if (timeAvailable)
     {
         uint32_t timeNow = tuya_mcu_get_millis();
-        uint32_t timeLastScheduleUpdate = timeNow+1;
         
         if (timeNow - timeLastScheduleUpdate > 30000)
         {
@@ -405,7 +372,7 @@ void tuya_device_loop (void *args){
             int day = 0;
             int hour = 0;
             int mins = 0;
-            if (tuya_mcu_getTime(day, hour, mins))
+            if (tuya_mcu_getTime(&day, &hour, &mins))
             {
                 // make monday first day
                 if (day == 0)
