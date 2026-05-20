@@ -728,10 +728,14 @@ void tuya_mcu_processRx()
         uint16_t message_length = tuya_mcu_get_msg_length (&msg[offset]);
 
         
-        if ( (offset + message_length) > received_bytes) {
-            LOG(LOG_FLOW, "%s: Offset + message length: %d + %d > received bytes: %d, scanning forward\n", __func__, offset, message_length, received_bytes);
+        if (message_length > MAX_RECEIVE_BUFFER_LENGTH) {
+            LOG(LOG_ERR, "%s: message length %d exceeds buffer, scanning forward\n", __func__, message_length);
             offset++;
             continue;
+        }
+        if ((offset + message_length) > received_bytes) {
+            LOG(LOG_FLOW, "%s: waiting for %d more bytes\n", __func__, offset + message_length - received_bytes);
+            break;
         }
         
         
