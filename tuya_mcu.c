@@ -74,7 +74,7 @@ bool tuya_mcu_getTime(int *dayOfWeek, int *hour, int *minutes)
         
         gotTime = true;
     }
-    LOG(LOG_EVENT, "%s: day: %d, hour: %d, min: %d (epoch %ld)\n", __func__, *dayOfWeek, *hour, *minutes, (long int)tnow);
+    LOG(LOG_FLOW, "%s: day: %d, hour: %d, min: %d (epoch %ld)\n", __func__, *dayOfWeek, *hour, *minutes, (long int)tnow);
     
     return gotTime;
 }
@@ -95,7 +95,7 @@ long long tuya_mcu_get_millis() {
 void tuya_mcu_sendTime(bool timeAvailable)
 {
     static uint8_t sendTimeCmd[8]= {01,00,00,00,00,00,00,00};
-    LOG(LOG_EVENT, "%s: timeAvailbale: %s, can query: %s\n", __func__, timeAvailable ? "True" : "False", canQuery ? "True" : "False");
+    LOG(LOG_FLOW, "%s: timeAvailbale: %s, can query: %s\n", __func__, timeAvailable ? "True" : "False", canQuery ? "True" : "False");
     struct tm* new_time = NULL;
     if (timeAvailable ==true)
     {
@@ -301,37 +301,37 @@ void tuya_mcu_print_message (uint8_t msg[], bool valid){
     if (valid == true) {
         message_length = tuya_mcu_get_msg_length (msg);
     }
-    LOG(LOG_EVENT, "%s: Message:", __func__);
+    LOG(LOG_FLOW, "%s: Message:", __func__);
     
     for (uint8_t i=0 ;  i < message_length ; i++)
     {
         switch (i) {
             case E_MAGIC1:
-                LOG(LOG_EVENT, " MB 1:");
+                LOG(LOG_FLOW, " MB 1:");
                 break;
             case E_MAGIC2:
-                LOG(LOG_EVENT, " MB 2:");
+                LOG(LOG_FLOW, " MB 2:");
                 break;
             case E_VERSION:
-                LOG(LOG_EVENT, " Version:");
+                LOG(LOG_FLOW, " Version:");
                 break;
             case E_CMD:
-                LOG(LOG_EVENT, " CMD:");
+                LOG(LOG_FLOW, " CMD:");
                 break;
             case E_PAYLOAD_LENGTH_HI:
-                LOG(LOG_EVENT, " Length HI:");
+                LOG(LOG_FLOW, " Length HI:");
                 break;
             case E_PAYLOAD_LENGTH_LO:
-                LOG(LOG_EVENT, " Length Low:");
+                LOG(LOG_FLOW, " Length Low:");
                 break;
             case E_PAYLOAD:
-                LOG(LOG_EVENT, "\nPayload:");
+                LOG(LOG_FLOW, "\nPayload:");
             default:
                 break;
         }
         if (i == message_length-1)
-            LOG(LOG_EVENT, " Checksum:");
-        LOG(LOG_EVENT, " 0x%02X", msg[i]);
+            LOG(LOG_FLOW, " Checksum:");
+        LOG(LOG_FLOW, " 0x%02X", msg[i]);
     }
 }
 
@@ -343,7 +343,7 @@ bool tuya_mcu_message_is_valid(uint8_t msg[])
     uint8_t checksum = tuya_mcu_calc_checksum(msg);
     
     if (msg[E_MAGIC1] == 0x55 && msg[E_MAGIC2] == 0xaa && message_length >= TUYA_MCU_HEADER_SIZE && checksum == msg[message_length - 1] ){
-        LOG(LOG_EVENT, "%s: Valid\n", __func__);
+        LOG(LOG_FLOW, "%s: Valid\n", __func__);
         return true;
     } else {
         if ( msg[E_MAGIC1] != 0x55 || msg[E_MAGIC2] != 0xaa)
@@ -416,7 +416,7 @@ void tuya_mcu_set_payload(uint8_t msg[], uint8_t* payload, uint8_t payload_lengt
 
 void tuya_mcu_send_cmd(uint8_t cmd)
 {
-    LOG(LOG_EVENT, "%s: 0x%02X\n", __func__, cmd);
+    LOG(LOG_FLOW, "%s: 0x%02X\n", __func__, cmd);
     
     messageToSend[E_MAGIC1] = 0x55;
     messageToSend[E_MAGIC2] = 0xaa;
@@ -437,7 +437,7 @@ void tuya_mcu_send_cmd(uint8_t cmd)
 
 void tuya_mcu_send_message(uint8_t cmd, uint8_t payload[], uint8_t payload_length)
 {
-    LOG(LOG_EVENT, "%s: cmd 0x%02X, len %d\n", __func__, cmd, payload_length);
+    LOG(LOG_FLOW, "%s: cmd 0x%02X, len %d\n", __func__, cmd, payload_length);
     
     uint8_t msg_buf[MAX_SEND_BUFFER_LENGTH];
     
@@ -489,7 +489,7 @@ void tuya_mcu_updateWifiState()
         }
         
         tuya_mcu_setWifiState(newState);
-        LOG(LOG_EVENT, "%s: wifi state %d\n", __func__, newState);
+        LOG(LOG_FLOW, "%s: wifi state %d\n", __func__, newState);
     }
 }
 
@@ -531,7 +531,7 @@ void tuya_mcu_setWifiState(WifiState_t newState)
 
 void tuya_mcu_process_message(uint8_t msg[])
 {
-    LOG(LOG_EVENT, "\n\n%s:\n", __func__);
+    LOG(LOG_FLOW, "\n\n%s:\n", __func__);
     
     if (!tuya_mcu_message_is_valid(msg))
     {
@@ -540,7 +540,7 @@ void tuya_mcu_process_message(uint8_t msg[])
     }
     
     uint8_t cmd = tuya_mcu_get_command(msg);
-    LOG(LOG_EVENT, "%s: CMD: 0x%02X\n", __func__, cmd);
+    LOG(LOG_FLOW, "%s: CMD: 0x%02X\n", __func__, cmd);
     
     mcuProtocolVersion = tuya_mcu_get_version(msg);
     uint16_t payload_length = tuya_mcu_get_payload ( msg, payload);
@@ -549,12 +549,12 @@ void tuya_mcu_process_message(uint8_t msg[])
     {
         case MSG_CMD_HEARTBEAT:
         {
-            LOG(LOG_EVENT, "%s: Heartbeat\n", __func__);
+            LOG(LOG_FLOW, "%s: Heartbeat\n", __func__);
             if (1 == payload_length)
             {
                 if (payload[0] == 1){
                     
-                    LOG(LOG_EVENT, "%s: MCU Heartbeat True\n", __func__);
+                    LOG(LOG_FLOW, "%s: MCU Heartbeat True\n", __func__);
                     
                     if (!gotHeartbeat)
                     {
@@ -594,7 +594,7 @@ void tuya_mcu_process_message(uint8_t msg[])
         }
         case MSG_CMD_QUERY_PROD_INFO:
         {
-            LOG(LOG_EVENT, "%s: Received Query Prod Info\n", __func__);
+            LOG(LOG_FLOW, "%s: Received Query Prod Info\n", __func__);
             tuya_mcu_print_message ( msg, true);
             
             gotProdKey = true;
@@ -609,7 +609,7 @@ void tuya_mcu_process_message(uint8_t msg[])
         }
         case MSG_CMD_QUERY_WIFI_MODE:
         {
-            LOG(LOG_EVENT, "%s: Received Query Wifi mode\n", __func__);
+            LOG(LOG_FLOW, "%s: Received Query Wifi mode\n", __func__);
             
             gotWifiMode = true;
             
@@ -618,14 +618,14 @@ void tuya_mcu_process_message(uint8_t msg[])
                 uint8_t wifi_indicator_pin = payload[0];
                 uint8_t reset_pin = payload[1];
                 wifiMode = WIFI_MODE_WIFI_PROCESSING;
-                LOG(LOG_EVENT, "%s: MCU wifi pin: %d, reset pin: %d\n", __func__, wifi_indicator_pin , reset_pin );
+                LOG(LOG_FLOW, "%s: MCU wifi pin: %d, reset pin: %d\n", __func__, wifi_indicator_pin , reset_pin );
                 canQuery = true;
                 tuya_mcu_send_cmd (MSG_CMD_QUERY_DEVICE_STATUS);
                 if (mcu_init_stage == 3) mcu_init_stage=5;
             }
             else
             {
-                LOG(LOG_EVENT, "%s: Cooperative mode\n", __func__);
+                LOG(LOG_FLOW, "%s: Cooperative mode\n", __func__);
                 wifiMode = WIFI_MODE_COOPERATIVE_PROCESSING;
                 sendWifiStateMsg = true;
                 tuya_mcu_updateWifiState();
@@ -636,7 +636,7 @@ void tuya_mcu_process_message(uint8_t msg[])
         }
         case MSG_CMD_REPORT_WIFI_STATUS:
         {
-            LOG(LOG_EVENT, "%s: Received Report WiFi status\n", __func__);
+            LOG(LOG_FLOW, "%s: Received Report WiFi status\n", __func__);
             canQuery = true;
             tuya_mcu_send_cmd (MSG_CMD_QUERY_DEVICE_STATUS);
             if (mcu_init_stage == 4) mcu_init_stage=5;
@@ -650,7 +650,7 @@ void tuya_mcu_process_message(uint8_t msg[])
         }
         case MSG_CMD_DP_STATUS:
         {
-            LOG(LOG_EVENT, "%s: DP Status\n", __func__);
+            LOG(LOG_FLOW, "%s: DP Status\n", __func__);
             if (tuya_mcu_get_payload_length(msg) > 0)
             {
                 tuya_device_handleDPStatusMsg(msg);
@@ -664,7 +664,7 @@ void tuya_mcu_process_message(uint8_t msg[])
         }
         case MSG_CMD_OBTAIN_LOCAL_TIME:
         {
-            LOG(LOG_EVENT, "%s: Obtain Local Time\n", __func__);
+            LOG(LOG_FLOW, "%s: Obtain Local Time\n", __func__);
             tuya_mcu_sendTime(timeAvailable);
             break;
         }
@@ -702,14 +702,14 @@ void tuya_mcu_processRx()
     static uint8_t received_bytes = 0;
     uint8_t offset = 0;
     
-    LOG(LOG_EVENT, "\n\n%s:\n", __func__);
+    LOG(LOG_FLOW, "\n\n%s:\n", __func__);
     
     while (serial_available() > 0 && received_bytes < MAX_RECEIVE_BUFFER_LENGTH )
     {
         msg[received_bytes] = serial_read();
         received_bytes++;
     }
-    LOG(LOG_EVENT, "%s: Received %d bytes\n", __func__, received_bytes);
+    LOG(LOG_FLOW, "%s: Received %d bytes\n", __func__, received_bytes);
 
     while  ((received_bytes - offset) >= TUYA_MCU_HEADER_SIZE ){
         
@@ -747,10 +747,10 @@ void tuya_mcu_processRx()
             continue;
         }
         
-        LOG(LOG_EVENT, "%s: Message length: %d, offset: %d\n", __func__, message_length, offset);
+        LOG(LOG_FLOW, "%s: Message length: %d, offset: %d\n", __func__, message_length, offset);
         tuya_mcu_process_message(&msg[offset]);
         offset += message_length;
-        LOG(LOG_EVENT, "%s: MCU Init Stage: %d\n", __func__, mcu_init_stage);
+        LOG(LOG_FLOW, "%s: MCU Init Stage: %d\n", __func__, mcu_init_stage);
 
     }
     
