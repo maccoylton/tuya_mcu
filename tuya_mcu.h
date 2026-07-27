@@ -62,7 +62,6 @@ typedef enum
     MSG_CMD_OBTAIN_LOCAL_TIME = 0x1c,
     MSG_CMD_TEST_WIFI = 0x0e,
     MSG_CMD_ONTAIN_MEMORY= 0x0f,
-    MSG_CMD_RESET_FACTORY = 0xF4,
 } TUYAMessageCmd_t;
 
 

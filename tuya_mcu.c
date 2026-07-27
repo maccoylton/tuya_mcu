@@ -5,9 +5,6 @@
  */
 
 #include <tuya_mcu.h>
-#include <sysparam.h>
-#include <wifi_config.h>
-#include <homekit/homekit.h>
 
 #define LOG_ERR    1
 #define LOG_ACTION 2
@@ -643,49 +640,6 @@ void tuya_mcu_process_message(uint8_t msg[])
             canQuery = true;
             tuya_mcu_send_cmd (MSG_CMD_QUERY_DEVICE_STATUS);
             if (mcu_init_stage == 4) mcu_init_stage=5;
-            break;
-        }
-        case MSG_CMD_RESET_WIFI_SWITCH_NET_CFG:
-        {
-            LOG(LOG_ACTION, "%s: Reset Wifi\n", __func__);
-            tuya_mcu_send_cmd (MSG_CMD_RESET_WIFI_SWITCH_NET_CFG);
-            wifi_config_reset();
-            vTaskDelay(100 / portTICK_PERIOD_MS);
-            LOG(LOG_ACTION, "%s: Restarting\n", __func__);
-            sdk_system_restart();
-            break;
-        }
-        case MSG_CMD_RESET_WIFI_SELECT_NET_CFG:
-        {
-            LOG(LOG_ACTION, "%s: Select Network Config\n", __func__);
-            tuya_mcu_send_cmd (MSG_CMD_RESET_WIFI_SELECT_NET_CFG);
-            wifi_config_reset();
-            vTaskDelay(100 / portTICK_PERIOD_MS);
-            LOG(LOG_ACTION, "%s: Restarting\n", __func__);
-            sdk_system_restart();
-            break;
-        }
-        case MSG_CMD_RESET_FACTORY:
-        {
-            LOG(LOG_ACTION, "%s: Factory Reset\n", __func__);
-            tuya_mcu_send_cmd (MSG_CMD_RESET_FACTORY);
-            /* Erase all saved characteristics */
-            sysparam_set_data("target_temperature", NULL, 0, false);
-            sysparam_set_data("target_state", NULL, 0, false);
-            sysparam_set_data("external_temp_sensor", NULL, 0, false);
-            sysparam_set_data("preserve_state", NULL, 0, false);
-            sysparam_set_data("wifi_check_interval", NULL, 0, false);
-            /* Erase OTA/LCM parameters */
-            sysparam_set_data("ota_count", NULL, 0, false);
-            sysparam_set_data("ota_count_step", NULL, 0, false);
-            sysparam_set_data("lcm_beta", NULL, 0, false);
-            sysparam_set_data("ota_repo", NULL, 0, false);
-            sysparam_set_data("ota_version", NULL, 0, false);
-            wifi_config_reset();
-            homekit_server_reset();
-            vTaskDelay(100 / portTICK_PERIOD_MS);
-            LOG(LOG_ACTION, "%s: Restarting\n", __func__);
-            sdk_system_restart();
             break;
         }
         case MSG_CMD_DP_STATUS:
