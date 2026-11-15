@@ -41,9 +41,25 @@ static bool     callForHeatTargetPower = false;
 static uint32_t callForHeatClearedTick = 0;
 static bool     callForHeatEchoGuard = false;
 
+/* deferred re-assert of the override - queued from the rx handler, transmitted
+ * once the receive buffer has been drained (see tuya_mcu_processRx) */
+static bool     callForHeatPendingSetpoint = false;
+static bool     callForHeatPendingPower = false;
+static uint32_t callForHeatLastAttemptTick = 0;
+static uint8_t  callForHeatAttempts = 0;
+static bool     callForHeatGaveUp = false;
+static bool     callForHeatFlushRegistered = false;
+
 /* window after the override is cleared during which MCU reports that match the
  * override value are treated as stale echoes of our own command */
 #define CALL_FOR_HEAT_ECHO_GUARD_MS 5000
+/* minimum spacing between override re-asserts */
+#define CALL_FOR_HEAT_REASSERT_MS 5000
+/* give up rather than fight the MCU forever */
+#define CALL_FOR_HEAT_MAX_ATTEMPTS 3
+/* sanity limits - a bad value must never reach the MCU */
+#define CALL_FOR_HEAT_MIN_SETPOINT 5.0f
+#define CALL_FOR_HEAT_MAX_SETPOINT TUYA_THERMOSTAT_CALL_FOR_HEAT_SETPOINT
 
 
 /*variables used here */
@@ -112,9 +128,57 @@ static void send_setpoint_cmd(float temp)
 {
     static uint8_t setSetpointCmd[8] = {0x02, 0x02, 0x00, 0x04, 0x00, 0x00, 0x00, 0x00};
     
+    /* never let a bad value (NaN, flash garbage, out of range) reach the MCU */
+    if (!(temp >= CALL_FOR_HEAT_MIN_SETPOINT))
+        temp = CALL_FOR_HEAT_MIN_SETPOINT;
+    if (temp > CALL_FOR_HEAT_MAX_SETPOINT)
+        temp = CALL_FOR_HEAT_MAX_SETPOINT;
+    
     setPointTemp = temp;
     setSetpointCmd[7] = (uint8_t)(temp*2 + 0.5);
     tuya_mcu_send_message(MSG_CMD_DP_CMD, setSetpointCmd, 8);
+}
+
+
+/* invoked after the MCU receive buffer has been drained - the only place the
+ * override is re-asserted, so the rx stream is never starved mid-frame */
+static void call_for_heat_flush(void)
+{
+    if (!callForHeatPendingSetpoint && !callForHeatPendingPower)
+        return;
+    
+    if (callForHeatAttempts >= CALL_FOR_HEAT_MAX_ATTEMPTS)
+    {
+        if (!callForHeatGaveUp)
+        {
+            callForHeatGaveUp = true;
+            LOG(LOG_ERR, "%s: MCU did not accept the call for heat override after %d attempts - giving up\n", __func__, CALL_FOR_HEAT_MAX_ATTEMPTS);
+        }
+        callForHeatPendingSetpoint = false;
+        callForHeatPendingPower = false;
+        return;
+    }
+    
+    uint32_t now = xTaskGetTickCount();
+    if ((now - callForHeatLastAttemptTick) < pdMS_TO_TICKS(CALL_FOR_HEAT_REASSERT_MS))
+        return;
+    
+    callForHeatLastAttemptTick = now;
+    callForHeatAttempts++;
+    
+    if (callForHeatPendingPower)
+    {
+        callForHeatPendingPower = false;
+        send_power_cmd(true);
+    }
+    
+    if (callForHeatPendingSetpoint)
+    {
+        callForHeatPendingSetpoint = false;
+        send_setpoint_cmd(TUYA_THERMOSTAT_CALL_FOR_HEAT_SETPOINT);
+    }
+    
+    LOG(LOG_ACTION, "%s: re-asserting call for heat override (attempt %d of %d)\n", __func__, callForHeatAttempts, CALL_FOR_HEAT_MAX_ATTEMPTS);
 }
 
 
@@ -133,7 +197,14 @@ static bool call_for_heat_echo_guard_active()
 
 void tuya_thermostat_setCallForHeat(bool on, float real_target_temp, bool real_target_power)
 {
-    LOG(LOG_ACTION, "%s: %s, real target: %2.1f, real power: %d, setpoint: %2.1f, power: %d\n", __func__, on ? "true" : "false", real_target_temp, real_target_power, setPointTemp, powerOn);
+    LOG(LOG_ACTION, "%s: %s\n", __func__, on ? "true" : "false");
+    
+    if (!callForHeatFlushRegistered)
+    {
+        /* transmit override re-asserts after the rx drain, never during it */
+        tuya_mcu_set_rx_complete_callback(call_for_heat_flush);
+        callForHeatFlushRegistered = true;
+    }
     
     if (on == callForHeat)
         return;
@@ -146,9 +217,14 @@ void tuya_thermostat_setCallForHeat(bool on, float real_target_temp, bool real_t
         callForHeatTargetPower = real_target_power;
         callForHeat = true;
         callForHeatEchoGuard = false;
+        callForHeatGaveUp = false;
+        callForHeatPendingSetpoint = false;
+        callForHeatPendingPower = false;
+        callForHeatAttempts = 1;
+        callForHeatLastAttemptTick = xTaskGetTickCount();
         send_power_cmd(true);
         send_setpoint_cmd(TUYA_THERMOSTAT_CALL_FOR_HEAT_SETPOINT);
-        LOG(LOG_ACTION, "%s: call for heat on, setpoint pinned at %2.1f (%2.1f saved)\n", __func__, TUYA_THERMOSTAT_CALL_FOR_HEAT_SETPOINT, callForHeatTargetTemp);
+        LOG(LOG_ACTION, "%s: call for heat on, setpoint override requested\n", __func__);
     }
     else
     {
@@ -159,9 +235,13 @@ void tuya_thermostat_setCallForHeat(bool on, float real_target_temp, bool real_t
         callForHeatTargetPower = real_target_power;
         callForHeatClearedTick = xTaskGetTickCount();
         callForHeatEchoGuard = true;
+        callForHeatGaveUp = false;
+        callForHeatPendingSetpoint = false;
+        callForHeatPendingPower = false;
+        callForHeatAttempts = 0;
         send_setpoint_cmd(callForHeatTargetTemp);
         send_power_cmd(callForHeatTargetPower);
-        LOG(LOG_ACTION, "%s: call for heat off, restored setpoint %2.1f and power %d\n", __func__, callForHeatTargetTemp, callForHeatTargetPower);
+        LOG(LOG_ACTION, "%s: call for heat off, real target and power restored\n", __func__);
     }
 }
 
@@ -347,17 +427,32 @@ void tuya_device_handleDPStatusMsg(uint8_t msg[])
                 
                 if (callForHeat)
                 {
-                    /* power is owned by the call for heat override */
-                    if (!reported_power)
+                    if (reported_power)
                     {
-                        LOG(LOG_ACTION, "%s: power off ignored, call for heat active - re-asserting power on\n", __func__);
-                        send_power_cmd(true);
+                        /* confirmation of the forced power on */
+                        callForHeatPendingPower = false;
+                        callForHeatAttempts = 0;
+                    }
+                    else
+                    {
+                        /* someone at the panel turned it off - the panel wins.
+                         * abandon the override rather than fighting a person
+                         * standing next to a heater. */
+                        callForHeat = false;
+                        callForHeatPendingSetpoint = false;
+                        callForHeatPendingPower = false;
+                        callForHeatEchoGuard = false;
+                        callForHeatGaveUp = false;
+                        callForHeatAttempts = 0;
+                        LOG(LOG_ACTION, "%s: panel power off during call for heat - override abandoned\n", __func__);
+                        tuya_thermostat_setPower(false, false);
+                        tuya_thermostat_emitChange(CHANGE_TYPE_CALL_FOR_HEAT);
                     }
                 }
                 else if (reported_power && (powerOn != reported_power) && call_for_heat_echo_guard_active())
                 {
                     /* stale echo of the forced power on, arriving after the override cleared */
-                    LOG(LOG_ACTION, "%s: stale power on echo ignored - restoring power %d\n", __func__, callForHeatTargetPower);
+                    LOG(LOG_ACTION, "%s: stale power on echo ignored\n", __func__);
                     send_power_cmd(callForHeatTargetPower);
                 }
                 else
@@ -379,21 +474,23 @@ void tuya_device_handleDPStatusMsg(uint8_t msg[])
                 {
                     if (reported_temp == TUYA_THERMOSTAT_CALL_FOR_HEAT_SETPOINT)
                     {
-                        /* confirmation of our own override, nothing to do */
-                        LOG(LOG_EVENT, "%s: setpoint %2.1f is call for heat confirmation - ignored\n", __func__, reported_temp);
+                        /* MCU accepted the override - nothing to do, never emit */
+                        callForHeatPendingSetpoint = false;
+                        callForHeatAttempts = 0;
+                        callForHeatGaveUp = false;
                     }
-                    else
+                    else if (!callForHeatGaveUp && !callForHeatPendingSetpoint)
                     {
-                        /* panel knob turned away from the override - strict master,
-                         * drop the change and force the override back */
-                        LOG(LOG_ACTION, "%s: setpoint %2.1f dropped, call for heat active - re-asserting %2.1f\n", __func__, reported_temp, TUYA_THERMOSTAT_CALL_FOR_HEAT_SETPOINT);
-                        send_setpoint_cmd(TUYA_THERMOSTAT_CALL_FOR_HEAT_SETPOINT);
+                        /* panel knob turned away from the override (or the MCU has
+                         * not applied it yet) - queue a re-assert, do not emit */
+                        callForHeatPendingSetpoint = true;
+                        LOG(LOG_ACTION, "%s: setpoint differs from override - re-assert queued\n", __func__);
                     }
                 }
                 else if ((reported_temp == TUYA_THERMOSTAT_CALL_FOR_HEAT_SETPOINT) && (setPointTemp != reported_temp) && call_for_heat_echo_guard_active())
                 {
                     /* stale echo of the override, arriving after the override cleared */
-                    LOG(LOG_ACTION, "%s: stale setpoint echo %2.1f ignored - restoring %2.1f\n", __func__, reported_temp, callForHeatTargetTemp);
+                    LOG(LOG_ACTION, "%s: stale setpoint echo ignored\n", __func__);
                     send_setpoint_cmd(callForHeatTargetTemp);
                 }
                 else

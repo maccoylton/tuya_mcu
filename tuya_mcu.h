@@ -155,6 +155,12 @@ void tuya_mcu_loop(void *args);
 /* the main loop for reading and writing to the MCU */
 
 void tuya_device_loop (void *args);
+
+/* optional callback, invoked by tuya_mcu_processRx() once the receive buffer has
+ * been fully drained. Lets the application transmit safely (outside the rx drain)
+ * without tuya_mcu needing to know about it. */
+typedef void (*tuya_mcu_rx_complete_callback_t)(void);
+void tuya_mcu_set_rx_complete_callback(tuya_mcu_rx_complete_callback_t cb);
 /* called each time the mcu_loops to do anytign device specific  */
 
 void tuya_device_handleDPStatusMsg(uint8_t msg[]);

@@ -19,6 +19,7 @@ typedef enum
     CHANGE_TYPE_LOCK = 0x06,
     CHANGE_TYPE_SCHEDULE = 0x65,
     CHANGE_TYPE_EXTERNAL_TEMP = 0x66,
+    CHANGE_TYPE_CALL_FOR_HEAT = 0x67,
 } TUYA_Thermostat_change_type_t;
 
 typedef enum

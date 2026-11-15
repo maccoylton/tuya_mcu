@@ -41,6 +41,13 @@ uint8_t payload[MAX_RECEIVE_BUFFER_LENGTH-TUYA_MCU_HEADER_SIZE];
 uint8_t messageToSend[MAX_SEND_BUFFER_LENGTH];
 SemaphoreHandle_t write_semaphore = NULL;
 
+static tuya_mcu_rx_complete_callback_t rx_complete_callback = NULL;
+
+void tuya_mcu_set_rx_complete_callback(tuya_mcu_rx_complete_callback_t cb)
+{
+    rx_complete_callback = cb;
+}
+
 
 
 void tuya_mcu_init() {
@@ -756,6 +763,10 @@ void tuya_mcu_processRx()
         memset(msg + received_bytes, 0, offset);
     }
     LOG(LOG_FLOW, "%s: End\n\n", __func__);
+    
+    /* buffer drained - safe for the application to transmit now */
+    if (rx_complete_callback != NULL)
+        rx_complete_callback();
     
 }
 
