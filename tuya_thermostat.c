@@ -57,9 +57,23 @@ static bool     callForHeatFlushRegistered = false;
 #define CALL_FOR_HEAT_REASSERT_MS 5000
 /* give up rather than fight the MCU forever */
 #define CALL_FOR_HEAT_MAX_ATTEMPTS 3
-/* sanity limits - a bad value must never reach the MCU */
-#define CALL_FOR_HEAT_MIN_SETPOINT 5.0f
-#define CALL_FOR_HEAT_MAX_SETPOINT TUYA_THERMOSTAT_CALL_FOR_HEAT_SETPOINT
+/* sanity limits - a bad value must never reach the MCU.
+ * note the ceiling is the protocol range (HomeKit declares 10-38C for Target
+ * Temperature, and the MCU accepts DP setpoints above its own 35C panel button
+ * limit - verified at 37.0), NOT the call for heat pin value, because
+ * send_setpoint_cmd() is also used to restore the user's real target. */
+#define SETPOINT_MIN 5.0f
+#define SETPOINT_MAX 38.0f
+
+/* the compiled-in defaults for the temperature variables are guesses, not
+ * readings (internalTemp/externalTemp/setPointTemp all start at 20.0f). if the
+ * first real report happens to equal the default, the "did it change?" test
+ * suppresses it and the value is never published - e.g. a room at 20.0C left
+ * HomeKit showing 0C (32F) until the temperature moved. these flags force the
+ * first report through. */
+static bool internalTempValid = false;
+static bool externalTempValid = false;
+static bool setPointTempValid = false;
 
 
 /*variables used here */
@@ -129,10 +143,10 @@ static void send_setpoint_cmd(float temp)
     static uint8_t setSetpointCmd[8] = {0x02, 0x02, 0x00, 0x04, 0x00, 0x00, 0x00, 0x00};
     
     /* never let a bad value (NaN, flash garbage, out of range) reach the MCU */
-    if (!(temp >= CALL_FOR_HEAT_MIN_SETPOINT))
-        temp = CALL_FOR_HEAT_MIN_SETPOINT;
-    if (temp > CALL_FOR_HEAT_MAX_SETPOINT)
-        temp = CALL_FOR_HEAT_MAX_SETPOINT;
+    if (!(temp >= SETPOINT_MIN))
+        temp = SETPOINT_MIN;
+    if (temp > SETPOINT_MAX)
+        temp = SETPOINT_MAX;
     
     setPointTemp = temp;
     setSetpointCmd[7] = (uint8_t)(temp*2 + 0.5);
@@ -273,9 +287,11 @@ void tuya_thermostat_setSetPointTemp( float temp, bool updateMCU)
     
     LOG(LOG_EVENT, "%s: current target: %2.1f, new target: %2.1f, update MCU: %s\n", __func__, setPointTemp, temp, updateMCU ? "True" : "False");
     
-    if (temp != setPointTemp)
+    /* always publish the first reading - see setPointTempValid */
+    if (!setPointTempValid || temp != setPointTemp)
     {
         setPointTemp = temp;
+        setPointTempValid = true;
         if (updateMCU)
         {
             setSetpointCmd[7] = (uint8_t)(setPointTemp*2 + 0.5);
@@ -291,9 +307,11 @@ void tuya_thermostat_setInternalTemp( float temp)
 {
     LOG(LOG_EVENT, "%s: temp: %2.1f, last internal temp: %2.1f\n", __func__, temp, internalTemp);
     
-    if (temp != internalTemp)
+    /* always publish the first reading - see internalTempValid */
+    if (!internalTempValid || temp != internalTemp)
     {
         internalTemp = temp;
+        internalTempValid = true;
         tuya_thermostat_emitChange(CHANGE_TYPE_INTERNAL_TEMP);
     }
     
@@ -304,9 +322,11 @@ void tuya_thermostat_setExternalTemp( float temp)
 {
     LOG(LOG_EVENT, "%s: temp: %f, last external temp: %f\n", __func__, temp, externalTemp);
     
-    if (temp != externalTemp)
+    /* always publish the first reading - see internalTempValid */
+    if (!externalTempValid || temp != externalTemp)
     {
         externalTemp = temp;
+        externalTempValid = true;
         tuya_thermostat_emitChange(CHANGE_TYPE_EXTERNAL_TEMP);
     }
     
