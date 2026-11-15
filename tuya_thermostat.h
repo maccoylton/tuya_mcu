@@ -55,6 +55,14 @@ extern uint8_t schedule[54];
 
 extern bool externalTempSensor;
 
+/* Call for heat override: while active the MCU power is forced on and the
+ * setpoint is pinned at TUYA_THERMOSTAT_CALL_FOR_HEAT_SETPOINT, keeping the real
+ * user target so it can be restored when the override is cleared. */
+extern bool  callForHeat;
+extern float callForHeatTargetTemp;
+
+#define TUYA_THERMOSTAT_CALL_FOR_HEAT_SETPOINT 35.0f
+
 
 //tuya_thermostat my_thermostat;
 
@@ -67,6 +75,11 @@ void tuya_thermostat_getSchedulePeriod(int day, int period, SchedulePeriod_t* p)
 void tuya_thermostat_setPower( bool on, bool updateMCU);
 
 void tuya_thermostat_setSetPointTemp( float temp, bool updateMCU);
+
+void tuya_thermostat_setCallForHeat(bool on, float real_target_temp, bool real_target_power);
+/* enable/disable the call for heat override. While enabled the MCU power is
+ * forced on and the setpoint pinned at TUYA_THERMOSTAT_CALL_FOR_HEAT_SETPOINT;
+ * real_target_temp/real_target_power are saved and restored on disable. */
 
 void tuya_device_loop (void *args);
 /* called each time mcu loop */
